@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/OWNER/repository-name/schemas/frontmatter.schema.json",
+  "title": "Development Docs Frontmatter Schema",
+  "description": "開発ドキュメントの YAML フロントマター構造定義（lint スクリプトおよびビューアー共通）",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "type",
+    "status",
+    "summary",
+    "created",
+    "updated"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "リポジトリ内で一意の識別子（英小文字・数字・ハイフン）"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "ドキュメントのタイトル（日本語・英語可）"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "index",
+        "overview",
+        "architecture",
+        "glossary",
+        "spec",
+        "adr",
+        "plan",
+        "note",
+        "guide"
+      ],
+      "description": "ドキュメントの種別"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "active",
+        "accepted",
+        "superseded",
+        "deprecated",
+        "done"
+      ],
+      "description": "ドキュメントの現在の状態"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "1〜2文（200文字以内）の要約。MOC一覧表示およびAIの読込判断に使用"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "分類・検索用タグ（日本語・英語可）"
+    },
+    "related": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+      },
+      "description": "関連する他ドキュメントの id 配列"
+    },
+    "supersedes": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "（ADR専用）この決定によって置き換えられた旧 ADR の id"
+    },
+    "created": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "作成日 (YYYY-MM-DD)"
+    },
+    "updated": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "最終更新日 (YYYY-MM-DD)"
+    }
+  },
+  "typeStatusRules": {
+    "index": ["active"],
+    "overview": ["draft", "active", "deprecated"],
+    "architecture": ["draft", "active", "deprecated"],
+    "glossary": ["draft", "active", "deprecated"],
+    "spec": ["draft", "active", "deprecated"],
+    "adr": ["draft", "accepted", "superseded", "deprecated"],
+    "plan": ["draft", "active", "done"],
+    "note": ["draft", "active", "deprecated"],
+    "guide": ["draft", "active", "deprecated"]
+  }
+}

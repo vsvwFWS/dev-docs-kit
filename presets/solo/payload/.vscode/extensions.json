@@ -1,0 +1,8 @@
+{
+  "recommendations": [
+    "bierner.markdown-mermaid",
+    "hediet.vscode-drawio",
+    "DavidAnson.vscode-markdownlint",
+    "redhat.vscode-yaml"
+  ]
+}

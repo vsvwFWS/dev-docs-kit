@@ -1,0 +1,84 @@
+preset: solo
+version: 0.1.1
+description: 個人開発・小規模プロジェクト向けの開発ドキュメント構成プリセット
+
+files:
+  # 管理ファイル: repository-name が正本。アップデート時は上書き更新する
+  - src: payload/docs/_conventions.md
+    dest: docs/_conventions.md
+    policy: overwrite
+
+  - src: payload/docs/_schema/frontmatter.schema.json
+    dest: docs/_schema/frontmatter.schema.json
+    policy: overwrite
+
+  - src: payload/docs/_templates/overview.md
+    dest: docs/_templates/overview.md
+    policy: overwrite
+
+  - src: payload/docs/_templates/architecture.md
+    dest: docs/_templates/architecture.md
+    policy: overwrite
+
+  - src: payload/docs/_templates/glossary.md
+    dest: docs/_templates/glossary.md
+    policy: overwrite
+
+  - src: payload/docs/_templates/spec.md
+    dest: docs/_templates/spec.md
+    policy: overwrite
+
+  - src: payload/docs/_templates/adr.md
+    dest: docs/_templates/adr.md
+    policy: overwrite
+
+  - src: payload/docs/_templates/plan.md
+    dest: docs/_templates/plan.md
+    policy: overwrite
+
+  - src: payload/docs/_templates/note.md
+    dest: docs/_templates/note.md
+    policy: overwrite
+
+  - src: payload/docs/_templates/guide.md
+    dest: docs/_templates/guide.md
+    policy: overwrite
+
+  - src: payload/.agents/skills/docs-author/SKILL.md
+    dest: .agents/skills/docs-author/SKILL.md
+    policy: overwrite
+
+  - src: payload/.agents/skills/docs-sync/SKILL.md
+    dest: .agents/skills/docs-sync/SKILL.md
+    policy: overwrite
+
+  - src: payload/.agents/skills/docs-sync/scripts/docs_lint.mjs
+    dest: .agents/skills/docs-sync/scripts/docs_lint.mjs
+    policy: overwrite
+
+  - src: payload/.agents/skills/docs-bootstrap/SKILL.md
+    dest: .agents/skills/docs-bootstrap/SKILL.md
+    policy: overwrite
+
+  # ユーザー文書: 初回導入時のみ作成し、既存ファイルがある場合は上書きしない
+  - src: payload/docs/index.md
+    dest: docs/index.md
+    policy: create-only
+
+  # ブロック統合: マーカー間を置換（マーカーがなければ末尾へ追記）
+  - src: payload/AGENTS.block.md
+    dest: AGENTS.md
+    policy: merge-block
+    marker_start: "<!-- repository-name:solo:start"
+    marker_end: "<!-- repository-name:solo:end -->"
+
+  # 任意の VSCode 設定統合
+  - src: payload/.vscode/extensions.json
+    dest: .vscode/extensions.json
+    policy: merge-json
+    optional: true
+
+  - src: payload/.vscode/settings.json
+    dest: .vscode/settings.json
+    policy: merge-json
+    optional: true
