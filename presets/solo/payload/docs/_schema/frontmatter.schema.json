@@ -64,7 +64,7 @@
         "type": "string",
         "minLength": 1
       },
-      "description": "分類・検索用タグ（日本語・英語可）"
+      "description": "機能・テーマの分類。同じ機能では既存のタグを再利用する"
     },
     "related": {
       "type": "array",
@@ -72,7 +72,7 @@
         "type": "string",
         "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
       },
-      "description": "関連する他ドキュメントの id 配列"
+      "description": "本文の流れに含めにくい関連文書の id 配列。本文リンクとの二重登録は不要"
     },
     "supersedes": {
       "type": "string",
@@ -87,7 +87,7 @@
     "updated": {
       "type": "string",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-      "description": "最終更新日 (YYYY-MM-DD)"
+      "description": "最終編集日 (YYYY-MM-DD)。正しさや検証済みの証明ではない"
     }
   },
   "typeStatusRules": {

@@ -1,8 +1,16 @@
 preset: solo
-version: 0.1.1
+version: 0.2.0
 description: 個人開発・小規模プロジェクト向けの開発ドキュメント構成プリセット
 
 files:
+  - src: payload/docs/_viewer-contract.md
+    dest: docs/_viewer-contract.md
+    policy: overwrite
+
+  - src: payload/docs/_config.json
+    dest: docs/_config.json
+    policy: create-only
+
   # 管理ファイル: repository-name が正本。アップデート時は上書き更新する
   - src: payload/docs/_conventions.md
     dest: docs/_conventions.md

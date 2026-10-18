@@ -6,9 +6,9 @@ AIコーディングエージェント（Codex / Antigravity CLI など）と人
 
 ## 特徴
 
-1. **AIのコンテキストを節約する階層設計（MOC + Summary）**
-   - すべての文書に YAML フロントマター（`id`, `type`, `status`, `summary`, `related` など）を付与します。
-   - エージェントは最初に目次ハブ（`docs/index.md`）の `summary` だけを読み、作業に関係する文書だけを全文読み込みます。
+1. **人間とAIが目的に応じて読める入口（案内 + Summary）**
+   - 管理対象の文書に YAML フロントマター（`id`, `type`, `status`, `summary`, `related` など）を付与します。
+   - 人間とAIは目次の目的別案内と要約から必要な文書へ進み、機能一覧から現行仕様・設計理由・手順を探せます。
 2. **Codex / Antigravity CLI 両対応の構成**
    - 常駐ルールは `AGENTS.md`、作業手順は `.agents/skills/<skill>/SKILL.md` に分離し、両エージェントが標準で認識できるディレクトリ構造を採用しています。
 3. **外部パッケージ依存ゼロの Node.js 検証・同期スクリプト（`docs_lint.mjs`）**
@@ -41,12 +41,12 @@ https://github.com/OWNER/repository-name の presets/solo/INSTALL.md を読ん�
 /path/to/repository-name/presets/solo/INSTALL.md に従って、このリポジトリに開発ドキュメントの仕組みを導入してください。
 ```
 
-### 導入直後に既存コードからドキュメント初版を作る場合
+### 導入直後にドキュメントの入口と概要を整える場合
 
-導入が完了したあと、続けて以下のように指示すると、コードベースを調査して `overview.md`, `architecture.md`, `glossary.md` の初版を生成します。
+導入が完了したあと、続けて以下のように指示すると、入口と概要を整え、必要に応じて構成・用語の文書を生成します。新規プロジェクトでは目的や利用シナリオから始めます。
 
 ```text
-docs-bootstrap スキルを使って、このリポジトリの基本ドキュメント（overview, architecture, glossary）の初版を作成してください。
+docs-bootstrap スキルを使って、このリポジトリの入口と概要、および理解に必要なドキュメントの初版を作成してください。
 ```
 
 ---
@@ -65,9 +65,11 @@ docs-bootstrap スキルを使って、このリポジトリの基本ドキュ�
 │       ├── docs-sync/               # 実装後のドキュメント同期・検証スキル
 │       │   ├── SKILL.md
 │       │   └── scripts/docs_lint.mjs
-│       └── docs-bootstrap/SKILL.md  # 既存コードからの初期ドキュメント生成スキル
+│       └── docs-bootstrap/SKILL.md  # 新規・既存の初期ドキュメント整備スキル
 ├── docs/
 │   ├── index.md                     # MOC（目次ハブ。docs_lint.mjs --index で自動更新可能）
+│   ├── _config.json                # 既存文書を段階的に取り込むための対象外一覧
+│   ├── _viewer-contract.md         # JSON・参照グラフとビューアーの連携仕様
 │   ├── _conventions.md              # ドキュメント規約（人間・エージェント共通の正本）
 │   ├── _schema/
 │   │   └── frontmatter.schema.json  # フロントマターの JSON Schema
@@ -103,3 +105,11 @@ repository-name/
 ```bash
 bash tests/run.sh
 ```
+
+## 文書の品質とビューアー連携
+
+現行仕様はspec、変更案と検証結果はplan、判断の理由はADRに分けます。同期時には合意済みの変更・実装の不具合・意図不明の差分を区別します。文書は必要なものだけ段階的に作ります。
+
+目次は現行文書・下書き・進行中の計画を分け、完了計画などは必要時に生成する `docs/_history.md` へ集約します。本文リンク・related・supersedesを区別した参照グラフをJSONで取得できます。詳細は [ビューアー連携契約](./presets/solo/payload/docs/_viewer-contract.md) を参照してください。
+
+[認証機能の文書例](./examples/auth-docs/index.md) で、全体像・現行仕様・設計理由・予定変更の読み分けを確認できます。Lintは構造を検証するもので、本文の意味や実装の正しさは別に確認します。

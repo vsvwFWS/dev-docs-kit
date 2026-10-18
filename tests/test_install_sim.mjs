@@ -39,7 +39,7 @@ function simulateInstall(targetDir) {
     }
   }
 
-  // payload/docs と payload/.agents を配置 (index.md のみ create-only)
+  // payload/docs と payload/.agents を配置 (index.md と _config.json は create-only)
   const copyRecursive = (srcDir, destDir, isCreateOnlyFn) => {
     fs.mkdirSync(destDir, { recursive: true });
     for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
@@ -59,7 +59,7 @@ function simulateInstall(targetDir) {
   copyRecursive(
     path.join(presetDir, 'payload/docs'),
     path.join(targetDir, 'docs'),
-    (destPath) => destPath.endsWith('docs/index.md')
+    (destPath) => ['index.md', '_config.json'].includes(path.basename(destPath))
   );
   copyRecursive(
     path.join(presetDir, 'payload/.agents'),
@@ -73,7 +73,7 @@ function simulateInstall(targetDir) {
     JSON.stringify(
       {
         preset: 'solo',
-        version: '0.1.1',
+        version: '0.2.0',
         source: presetDir,
         installedAt: '2026-10-17',
       },
@@ -99,7 +99,7 @@ try {
   const agentsAfterFirst = fs.readFileSync(path.join(dummyRepo, 'AGENTS.md'), 'utf8');
   assert.ok(agentsAfterFirst.includes('## Build Commands'), 'Original AGENTS.md content must be preserved');
   assert.ok(
-    agentsAfterFirst.includes('<!-- repository-name:solo:start v0.1.1'),
+    agentsAfterFirst.includes('<!-- repository-name:solo:start v0.2.0'),
     'Block marker must be appended'
   );
 
@@ -109,6 +109,12 @@ try {
     .readFileSync(indexPath, 'utf8')
     .replace('ドキュメント目次 (MOC)', 'カスタム目次タイトル');
   fs.writeFileSync(indexPath, customIndexContent, 'utf8');
+
+  // 対象外一覧と既存文書は再導入でも保持する。
+  const configPath = path.join(dummyRepo, 'docs/_config.json');
+  const config = JSON.stringify({ excludedFiles: ['legacy.md'] });
+  fs.writeFileSync(configPath, config);
+  fs.writeFileSync(path.join(dummyRepo, 'docs/legacy.md'), '# Existing document without metadata\n');
 
   // 2回目の導入（アップデート・冪等性の確認）
   simulateInstall(dummyRepo);
@@ -125,6 +131,9 @@ try {
     indexAfterSecond.includes('カスタム目次タイトル'),
     'create-only policy must preserve user edits to docs/index.md'
   );
+
+  assert.equal(fs.readFileSync(configPath, 'utf8'), config, 'create-only must preserve exclusions');
+  assert.equal(fs.readFileSync(path.join(dummyRepo, 'docs/legacy.md'), 'utf8'), '# Existing document without metadata\n');
 
   // 導入後の docs/ で lint が通ることを確認
   const graph = loadDocsGraph(path.join(dummyRepo, 'docs'));

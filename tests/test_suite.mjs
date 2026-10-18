@@ -23,6 +23,9 @@ const repoRoot = path.resolve(__dirname, '..');
   const manifestText = fs.readFileSync(manifestPath, 'utf8');
   const srcMatches = [...manifestText.matchAll(/^\s*-\s*src:\s*(.+)$/gm)].map((m) => m[1].trim());
   assert.ok(srcMatches.length >= 15, 'manifest.yaml should list payload files');
+  const version = manifestText.match(/^version: (.+)$/m)[1];
+  const block = fs.readFileSync(path.join(repoRoot, 'presets/solo/payload/AGENTS.block.md'), 'utf8');
+  assert.ok(block.includes(`:solo:start v${version} `), 'Manifest and managed block versions must match');
 
   for (const srcRel of srcMatches) {
     const fullSrc = path.join(repoRoot, 'presets/solo', srcRel);
@@ -241,3 +244,6 @@ updated: 2026-10-17
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
+
+// Behavior tests for the 0.2 document workflow and viewer contract.
+await import('./test_workflow.mjs');

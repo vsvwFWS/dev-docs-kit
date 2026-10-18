@@ -1,79 +1,94 @@
-# 開発ドキュメント規約 (`_conventions.md`)
+# 開発ドキュメント規約
 
-このファイルは、`docs/` 配下の開発ドキュメントを AI エージェントと人間の双方が迷わず作成・保守するためのルールを定義します。
-（先頭が `_` で始まるファイル・ディレクトリはメタ管理用のため、フロントマター検証の対象外です）
+人間が全体像と現在の仕様を理解でき、AIが必要な情報を選んで保守できる構成を維持します。Markdownを正本とし、ビューアーは検索・分類・状態・関係の表示を補助します。
 
----
+## 読む入口と正本
 
-## 1. ドキュメント種別（`type`）と配置場所
+- `index.md` の冒頭は目的別の案内です。全体像、環境構築、機能仕様、設計理由の順路を、存在する文書への相対リンクで案内します。AIもここから関連文書だけを読みます。
+- `overview.md` の機能一覧から各仕様へ進み、仕様から関連するADRやガイドへ進めるようにします。
+- 自動生成範囲の外に案内を書きます。全文書を手動で列挙する必要はありません。
+- 目次では現行文書、下書き、進行中の変更案を分けます。完了計画・置き換え済み・廃止文書は自動生成する `_history.md` から探せます。
+- 同じ説明は一か所を正本とし、ほかはリンクします。作業ログを現行仕様の代わりにしません。
 
-アンダースコア（`_`）で始まらないすべての Markdown ファイルは、以下のいずれかの `type` を持ちます。
+## 文書の役割と配置
 
-| `type` | 配置パス | ID の命名規則 | 役割 | 使える `status` |
-|---|---|---|---|---|
-| `index` | `docs/index.md` | `index` | 全文書の目次ハブ（MOC） | `active` |
-| `overview` | `docs/overview.md` | `overview` | プロジェクトの目的・スコープ・非ゴール・主要機能 | `draft`, `active`, `deprecated` |
-| `architecture` | `docs/architecture.md`（肥大化時は `docs/architecture/<slug>.md`） | `architecture`（または `arch-<slug>`） | システム全体構成、モジュール境界、データフロー、技術スタック | `draft`, `active`, `deprecated` |
-| `glossary` | `docs/glossary.md` | `glossary` | ドメイン用語とコード上の識別子の対応表 | `draft`, `active`, `deprecated` |
-| `spec` | `docs/specs/<slug>.md` | `spec-<slug>` | 機能仕様（要件、受け入れ条件、インターフェース） | `draft`, `active`, `deprecated` |
-| `adr` | `docs/adr/NNNN-<slug>.md`（4桁連番、例: `0001-use-jwt.md`） | `adr-NNNN`（例: `adr-0001`） | 設計判断の記録（なぜその選択肢を採ったか） | `draft`, `accepted`, `superseded`, `deprecated` |
-| `plan` | `docs/plans/YYYY-MM-DD-<slug>.md`（完了後は `docs/plans/archive/` へ移動） | `plan-<slug>` | 実装計画と作業ログ | `draft`, `active`, `done` |
-| `guide` | `docs/guides/<slug>.md` | `guide-<slug>` | 環境構築、デプロイ、運用手順などの How-to | `draft`, `active`, `deprecated` |
-| `note` | `docs/notes/<slug>.md` | `note-<slug>` | 調査メモ、ベンチマーク結果、ハマりどころの知見 | `draft`, `active`, `deprecated` |
+| type | 配置 | 役割 | status |
+|---|---|---|---|
+| index | `docs/index.md` | 目的別の入口・自動一覧 | active |
+| overview | `docs/overview.md` | 目的・利用者・機能・非対象 | draft, active, deprecated |
+| architecture | `docs/architecture.md`、分割時 `docs/architecture/<slug>.md` | 現在の構成・責務・境界・処理の流れ | draft, active, deprecated |
+| glossary | `docs/glossary.md` | ドメイン用語と識別子の対応 | draft, active, deprecated |
+| spec | `docs/specs/<slug>.md` | 現在有効な合意済みの振る舞い・制約 | draft, active, deprecated |
+| adr | `docs/adr/NNNN-<slug>.md` | 判断の背景・選択肢・理由・影響 | draft, accepted, superseded, deprecated |
+| plan | `docs/plans/YYYY-MM-DD-<slug>.md`、完了後 `archive/` | 変更案・作業・進捗・検証結果 | draft, active, done |
+| guide | `docs/guides/<slug>.md` | 現在使える環境構築・運用等の手順 | draft, active, deprecated |
+| note | `docs/notes/<slug>.md` | 調査結果と根拠。確定仕様とは区別 | draft, active, deprecated |
 
----
+`draft` は未確認・作成途中であり、確定事項として扱いません。`accepted` のADRは判断の採用を意味し、実装完了の証明ではありません。新機能や仕様変更の案はplanに置き、実装・検証後に現行specへ反映します。新規specのdraftは初版の整理・確認用で、将来の変更案の置き場ではありません。
 
-## 2. YAML フロントマター仕様
+外部から見える振る舞い、重要な制約・判断、繰り返し使う手順を優先して文書化します。軽微な修正ごとに一式を作らず、概要と入口から必要な文書だけ増やします。
 
-すべてのドキュメントの先頭に以下の YAML フロントマターを記載します。
-機械処理用のキーと列挙値（`type`, `status`）は**英語**とし、`title`, `summary`, `tags` は**日本語・英語どちらでも記述可能**です。
+## フロントマター
+
+通常のMarkdownには次の必須項目を記載します。`_`・`.` 始まりのファイル／ディレクトリと、明示的に対象外にした文書は管理対象外です。
 
 ```yaml
 ---
 id: spec-user-auth
-title: ユーザー認証機能の仕様
+title: ログインの仕様
 type: spec
 status: active
-summary: >-
-  メールアドレスとパスワードによるログイン、および JWT トークン発行・更新の仕様と受け入れ条件を定義する。
-tags: [auth, 認証, security]
-related: [architecture, adr-0001]
-created: 2026-10-17
-updated: 2026-10-17
+summary: メールとパスワードによるログイン、失敗時の応答、セッションの有効期限を定義する。
+tags: [auth]
+related: []
+created: 2026-10-19
+updated: 2026-10-19
 ---
 ```
 
-### 各フィールドのルール
-- **`id`**（必須）: リポジトリ内で一意の識別子。英小文字・数字・ハイフンのみ（`^[a-z0-9]+(-[a-z0-9]+)*$`）。ファイルを移動・リネームしても `id` は変えないでください。
-- **`title`**（必須）: 文書のタイトル。本文の `# 見出し` と揃えます。
-- **`type`**（必須）: 上記9種類のいずれか。
-- **`status`**（必須）: `type` ごとに許可された状態値（詳細は `_schema/frontmatter.schema.json` 参照）。
-- **`summary`**（必須）: **1〜2文（200文字以内）の要約**。AIエージェントが `index.md` を見て全文を読むべきか判断するための最重要フィールドです。「何が書いてあるか」を具体的に書いてください。
-- **`tags`**（任意）: 検索・分類用のタグ配列（日本語・英語可）。
-- **`related`**（任意）: 関連する他ドキュメントの `id` の配列（例: `[spec-login, adr-0001]`）。片方向に書いておけば、逆リンク（Backlinks）はツール側で自動計算されます。
-- **`supersedes`**（任意・`adr` 専用）: 過去の ADR を置き換える場合、旧 ADR の `id`（例: `adr-0001`）を指定します。同時に旧 ADR 側の `status` を `superseded` に更新してください。
-- **`created` / `updated`**（必須）: `YYYY-MM-DD` 形式の日付。内容を変更したら `updated` を当日に更新します。
+- `id`：一意の英小文字・数字・ハイフン。移動や改名でも維持します。基本文書は `index` / `overview` / `architecture` / `glossary`、その他は `spec-<slug>`、`adr-NNNN`、`plan-<slug>` 等を使います。
+- `title`：本文の見出しと揃えます。
+- `type` / `status`：上表の値。詳細は [スキーマ](./_schema/frontmatter.schema.json) を参照。
+- `summary`：何が書かれているかを具体的に表す1〜2文、200文字以内。読む対象の判断に使います。本文冒頭は内容を理解するための要点を説明します。
+- `created` / `updated`：有効な `YYYY-MM-DD`。内容変更時にupdatedを更新します。編集日は、内容の正しさや検証済みであることの証明には使いません。
+- `tags`（任意）：機能やテーマの分類。同じ機能では既存のタグを再利用します。typeをタグでも繰り返す必要はありません。
+- `related`（任意）：本文の流れに含めにくい関連文書のID配列。本文リンクと二重登録する必要はありません。
+- `supersedes`（ADR専用）：置き換える旧ADRのID。自身・ADR以外・循環を指定できません。採用時に旧ADRをsupersededへ変更します。下書きの提案だけで旧ADRを失効させません。
 
----
+acceptedのADR本文は原則維持し、変更する判断は新しいADRに記録します。旧ADRのstatus・updatedの更新は可能です。
 
-## 3. 執筆・分割・リンクの原則
+## 本文の品質
 
-1. **1ファイル1テーマ（Atomic Notes）**
-   - 1つの文書には1つの機能または1つの判断だけを書きます。
-   - `architecture.md` や `spec` が **300行** を超えたら、サブセクションを別ファイルに切り出し、`related` と相対リンクで繋いでください。
-2. **標準 Markdown 相対リンクの使用**
-   - 本文中で他のドキュメントを参照するときは、VSCode や GitHub でそのまま開けるよう相対パスの Markdown リンク（例: `[ADR-0001](../adr/0001-use-jwt.md)`）を使用します。`[[wikilink]]` は使用しません。
-3. **人間が直接編集する場合**
-   - 人間が手直しする際は、本文の編集と `updated` 日付の更新だけで構いません。リンク整合性や `index.md` の更新は、後からエージェントに「`docs-sync` を実行して」と頼むか、`node .agents/skills/docs-sync/scripts/docs_lint.mjs --index` を実行すれば自動で揃います。
+- 冒頭で対象・要点・適用範囲を短く説明します。抽象的な説明には具体例を添えます。
+- specは利用例、正常時・例外時の振る舞い、継続して満たす受け入れ条件を記述します。検証の実行結果や完了チェックはplanに記録します。
+- architectureは全体構成、責務・境界、主要な処理の流れを説明します。コードを読めば分かる詳細の転載は避けます。
+- guideは前提、手順、成功の確認方法を揃えます。
+- 不明な事項・推測は本文の「未確認事項」に明示し、HTMLコメントだけに隠しません。根拠となるコード・テスト・資料には相対リンク等を添えます。
+- テンプレートの該当しない項目や例は削除します。空欄を埋めるために説明を創作しません。
+- 1ファイル1テーマを目安にします。300行を超えたら分割を検討し、分割後も親文書に全体像の要約と詳細へのリンクを残します。
 
----
+## リンク・図・表
 
-## 4. 図表の記述ルール
+本文リンクは `[説明](./path.md)` 形式の相対Markdownリンクとし、wikilinkは使いません。参照先・参照元はツールで計算するため、逆リンクを手書きしません。本文リンク、related、supersedesの意味は区別します。
 
-1. **ダイアグラムは Mermaid を第一選択とする**
-   - フローチャート、シーケンス図、状態遷移図、ER 図は Markdown 内の ` ```mermaid ` コードブロックで記述します。
-   - **構文エラー防止**: ノードのラベルに括弧 `()` や記号を含む場合は、必ずダブルクォートで囲んでください（例: `A["認証サーバー (JWT)"]`）。
-2. **人間がレイアウトを微調整したい複雑な図は `.drawio.svg`**
-   - `docs/assets/<name>.drawio.svg` として保存し、Markdown からは `![説明](./assets/<name>.drawio.svg)` で参照します。
-3. **巨大な表は外部ファイル化する**
-   - 50行を超えるような設定一覧やデータ定義表は、YAML または CSV ファイルとして分離し、Markdown からリンクしてください。
+図はMermaidを基本とし、記号を含むノードラベルはダブルクォートで囲みます。人間が細かく調整する図は `docs/assets/<name>.drawio.svg` に保存できます。長いセルは文章に戻し、50行を超える一覧はCSVやYAMLへの分離を検討します。
+
+## 既存文書の段階的な取り込み
+
+`_config.json` の `excludedFiles` に、まだ管理対象にしない既存Markdownをdocs相対パスで個別指定します。既定値は空配列です。
+
+```json
+{"excludedFiles": ["legacy/setup.md", "old-design.md"]}
+```
+
+ワイルドカード・ディレクトリ・docs外のパス・index.mdの指定はできません。除外文書はそのまま保持され、メタデータ検証・自動一覧・IDグラフから外れます。通常の本文リンクで参照でき、リンク先ファイルの存在は検証します。取り込む際はメタデータを整えてから対象外一覧から外します。
+
+## 更新と確認
+
+変更が合意済みか、実装の不具合か、意図が不明かを区別し、不具合や不明点に合わせて仕様を変更しません。文書更新後は以下を実行します。
+
+```bash
+node .agents/skills/docs-sync/scripts/docs_lint.mjs --index
+```
+
+このコマンドは目次を更新して構造を検証します。リンクの自動修復や内容の正しさの保証は行いません。AIは根拠・用語・重複・仕様との差分を確認し、人間は目的・判断・仕様が意図に合うか確認します。ビューアー連携は [データ契約](./_viewer-contract.md) を参照してください。

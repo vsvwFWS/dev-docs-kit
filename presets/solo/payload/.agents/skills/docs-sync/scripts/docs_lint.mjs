@@ -238,18 +238,18 @@ export function parseFrontmatterYaml(yamlText) {
 export function extractMarkdownLinks(body) {
   const lines = body.replace(/\r\n/g, '\n').split('\n');
   const links = [];
-  let inFence = false;
+  let fence = null;
   let inHtmlComment = false;
 
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
 
-    // フェンスコードブロックの切り替え判定
-    if (/^\s*(`{3,}|~{3,})/.test(line)) {
-      inFence = !inFence;
+    // A fence closes only with the same delimiter and at least the opening length.
+    if (fence) {
+      const close = line.match(/^ {0,3}(`{3,}|~{3,})\s*$/);
+      if (close && close[1][0] === fence[0] && close[1].length >= fence.length) fence = null;
       continue;
     }
-    if (inFence) continue;
 
     // 複数行 HTML コメントの簡易スキップ
     if (inHtmlComment) {
@@ -265,6 +265,9 @@ export function extractMarkdownLinks(body) {
       line = line.slice(0, line.indexOf('<!--'));
     }
 
+    const openingFence = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (openingFence) { fence = openingFence[1]; continue; }
+
     // インラインコード `...` を除去
     const cleaned = line.replace(/`[^`]*`/g, '');
 
@@ -274,9 +277,11 @@ export function extractMarkdownLinks(body) {
       const text = match[1];
       let target = match[2].trim();
       // タイトル付きリンク `path "title"` の場合
-      const spaceIdx = target.indexOf(' ');
-      if (spaceIdx !== -1) {
-        target = target.slice(0, spaceIdx);
+      if (target.startsWith('<') && target.includes('>')) {
+        target = target.slice(1, target.indexOf('>'));
+      } else {
+        const spaceIdx = target.search(/\s/);
+        if (spaceIdx !== -1) target = target.slice(0, spaceIdx);
       }
       links.push({ text, target, line: i + 1 });
     }
@@ -374,65 +379,99 @@ export function collectDocFiles(dir) {
   return results.sort();
 }
 
-/**
- * docs/ 配下の全ドキュメントを読み込み、逆リンク（backlinks / supersededBy）を含むグラフを構築する
- * ビューアーのデータモデルとしてそのまま利用可能。
- *
- * @param {string} docsDir
- */
+/** Read explicit migration exclusions. Invalid config never silently excludes files. */
+export function loadDocsConfig(docsDir) {
+  const configPath = path.join(docsDir, '_config.json');
+  const errors = [];
+  let excludedFiles = [];
+  if (fs.existsSync(configPath)) {
+    try {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      if (!config || Array.isArray(config) || typeof config !== 'object' ||
+          Object.keys(config).some((key) => key !== 'excludedFiles') ||
+          (config.excludedFiles !== undefined && !Array.isArray(config.excludedFiles))) {
+        throw new Error('excludedFiles 配列だけを持つオブジェクトを指定してください');
+      }
+      excludedFiles = config.excludedFiles || [];
+      for (const file of excludedFiles) {
+        if (typeof file !== 'string' || !file.endsWith('.md') ||
+            /[\\*?\[\]\x00]/.test(file) || file.includes(':') ||
+            path.posix.isAbsolute(file) || file.split('/').some((part) => !part || part === '.' || part === '..') ||
+            file === 'index.md' || file.split('/').some((part) => part.startsWith('_') || part.startsWith('.'))) {
+          throw new Error('excludedFiles は docs/ 相対の通常 Markdown ファイルを個別指定します（index.md・ワイルドカード不可）');
+        }
+      }
+    } catch (error) {
+      excludedFiles = [];
+      errors.push({ level: 'error', file: '_config.json', code: 'INVALID_CONFIG', message: error.message, line: null });
+    }
+  }
+  return { excludedFiles: [...new Set(excludedFiles)], errors };
+}
+
+// Same path resolution for graph, lint and index checks; fragments are not document IDs.
+function resolveLocalLink(doc, target) {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('//') || target.startsWith('#')) return null;
+  const pathname = target.split('#')[0].split('?')[0];
+  if (!pathname) return null;
+  try {
+    return path.resolve(path.dirname(doc.filePath), decodeURIComponent(pathname));
+  } catch {
+    return path.resolve(path.dirname(doc.filePath), pathname);
+  }
+}
+
+/** Load managed documents. Keep legacy backlinks (related only) and add typed edges. */
 export function loadDocsGraph(docsDir) {
   const absDocsDir = path.resolve(docsDir);
-  const files = collectDocFiles(absDocsDir);
+  const config = loadDocsConfig(absDocsDir);
+  const excluded = new Set(config.excludedFiles);
+  const files = collectDocFiles(absDocsDir).filter((file) => !excluded.has(path.relative(absDocsDir, file).split(path.sep).join('/')));
   const documents = [];
   const byId = new Map();
   const duplicateIds = new Map();
-
+  const byPath = new Map();
   for (const filePath of files) {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const doc = parseDocument(content, filePath, absDocsDir);
+    const doc = parseDocument(fs.readFileSync(filePath, 'utf8'), filePath, absDocsDir);
     doc.backlinks = [];
+    doc.referenceBacklinks = [];
     doc.supersededBy = [];
     documents.push(doc);
-
+    byPath.set(filePath, doc);
     const id = doc.frontmatter?.id;
     if (typeof id === 'string' && id.length > 0) {
       if (byId.has(id)) {
         const existing = duplicateIds.get(id) || [byId.get(id).relativePath];
         existing.push(doc.relativePath);
         duplicateIds.set(id, existing);
-      } else {
-        byId.set(id, doc);
-      }
+      } else byId.set(id, doc);
     }
   }
-
-  // 逆リンク（backlinks）と supersededBy の計算
+  const edges = [];
+  const seen = new Set();
+  function addEdge(source, target, kind, reverseField) {
+    const sourceId = source.frontmatter?.id;
+    const targetId = target?.frontmatter?.id;
+    if (typeof sourceId !== 'string' || typeof targetId !== 'string' || !sourceId || !targetId || duplicateIds.has(sourceId) || duplicateIds.has(targetId)) return;
+    const key = JSON.stringify([sourceId, targetId, kind]);
+    if (seen.has(key)) return;
+    seen.add(key);
+    edges.push({ sourceId, targetId, kind });
+    target[reverseField].push(sourceId);
+  }
   for (const doc of documents) {
     const fm = doc.frontmatter;
-    if (!fm || !fm.id) continue;
-
+    if (!fm) continue;
     if (Array.isArray(fm.related)) {
-      for (const targetId of fm.related) {
-        const targetDoc = byId.get(targetId);
-        if (targetDoc && !targetDoc.backlinks.includes(fm.id)) {
-          targetDoc.backlinks.push(fm.id);
-        }
-      }
+      for (const id of fm.related) addEdge(doc, byId.get(id), 'related', 'backlinks');
     }
-    if (typeof fm.supersedes === 'string' && fm.supersedes.length > 0) {
-      const oldDoc = byId.get(fm.supersedes);
-      if (oldDoc && !oldDoc.supersededBy.includes(fm.id)) {
-        oldDoc.supersededBy.push(fm.id);
-      }
+    if (typeof fm.supersedes === 'string') addEdge(doc, byId.get(fm.supersedes), 'supersedes', 'supersededBy');
+    for (const link of doc.links) {
+      const targetPath = resolveLocalLink(doc, link.target);
+      if (targetPath) addEdge(doc, byPath.get(targetPath), 'references', 'referenceBacklinks');
     }
   }
-
-  return {
-    docsDir: absDocsDir,
-    documents,
-    byId,
-    duplicateIds,
-  };
+  return { docsDir: absDocsDir, documents, byId, duplicateIds, edges, config };
 }
 
 /**
@@ -460,7 +499,7 @@ export function validateDocs(graph, options = {}) {
   const staleDays = options.staleDays ?? 14;
   const now = options.now || new Date();
 
-  const errors = [];
+  const errors = [...(graph.config?.errors || [])];
   const warnings = [];
 
   const addError = (file, code, message, line = null) => {
@@ -508,6 +547,22 @@ export function validateDocs(graph, options = {}) {
     for (const reqKey of schema.required || []) {
       if (fm[reqKey] === undefined || fm[reqKey] === null || fm[reqKey] === '') {
         addError(rel, 'MISSING_REQUIRED', `必須項目 "${reqKey}" がありません`);
+      }
+    }
+
+    // Scalar and array item types are part of the public frontmatter contract.
+    for (const [key, rule] of Object.entries(schema.properties || {})) {
+      const value = fm[key];
+      if (value === undefined) continue;
+      if (rule.type === 'string' && typeof value !== 'string') {
+        addError(rel, 'INVALID_FIELD_TYPE', `${key} は文字列で指定してください`);
+      }
+      if (rule.type === 'array' && Array.isArray(value)) {
+        for (const item of value) {
+          if (typeof item !== 'string' || !item.trim() || (rule.items?.pattern && !new RegExp(rule.items.pattern).test(item))) {
+            addError(rel, 'INVALID_ARRAY_ITEM', `${key} の項目が不正です`);
+          }
+        }
       }
     }
 
@@ -593,11 +648,15 @@ export function validateDocs(graph, options = {}) {
     if (fm.supersedes !== undefined && fm.supersedes !== '') {
       if (fm.type !== 'adr') {
         addError(rel, 'INVALID_SUPERSEDES', `supersedes は type: adr のドキュメントでのみ指定できます`);
+      } else if (fm.supersedes === fm.id) {
+        addError(rel, 'INVALID_SUPERSEDES', 'ADR は自身を置き換えられません');
       } else if (!graph.byId.has(fm.supersedes)) {
         addError(rel, 'BROKEN_SUPERSEDES_ID', `supersedes で指定された旧 ADR "${fm.supersedes}" が存在しません`);
       } else {
         const oldAdr = graph.byId.get(fm.supersedes);
-        if (oldAdr && oldAdr.frontmatter?.status !== 'superseded') {
+        if (oldAdr.frontmatter?.type !== 'adr') {
+          addError(rel, 'INVALID_SUPERSEDES', '置き換え対象は ADR に限ります');
+        } else if (fm.status !== 'draft' && oldAdr.frontmatter?.status !== 'superseded') {
           addWarning(
             rel,
             'SUPERSEDED_STATUS_MISMATCH',
@@ -610,18 +669,8 @@ export function validateDocs(graph, options = {}) {
     // 本文中の相対リンク切れ検証
     for (const link of doc.links) {
       const target = link.target;
-      if (
-        target.startsWith('http://') ||
-        target.startsWith('https://') ||
-        target.startsWith('mailto:') ||
-        target.startsWith('#')
-      ) {
-        continue;
-      }
-      const withoutHash = target.split('#')[0].split('?')[0];
-      if (!withoutHash) continue;
-
-      const resolvedPath = path.resolve(path.dirname(doc.filePath), withoutHash);
+      const resolvedPath = resolveLocalLink(doc, target);
+      if (!resolvedPath) continue;
       if (!fs.existsSync(resolvedPath)) {
         addError(
           rel,
@@ -655,14 +704,29 @@ export function validateDocs(graph, options = {}) {
     }
   }
 
+  // A replacement chain must be acyclic and every ID unambiguous.
+  for (const doc of graph.documents) {
+    if (doc.frontmatter?.type !== 'adr') continue;
+    const visited = new Set();
+    let current = doc;
+    while (current?.frontmatter?.supersedes && !graph.duplicateIds.has(current.frontmatter.id)) {
+      const id = current.frontmatter.id;
+      if (visited.has(id)) {
+        addError(doc.relativePath, 'SUPERSEDES_CYCLE', 'ADR の置き換え関係が循環しています');
+        break;
+      }
+      visited.add(id);
+      current = graph.byId.get(current.frontmatter.supersedes);
+    }
+  }
+
   // index.md に未掲載のアクティブ文書の警告チェック
   const indexDoc = graph.byId.get('index');
   if (indexDoc) {
     const linkedFiles = new Set(
       indexDoc.links
-        .map((l) => l.target.split('#')[0])
-        .filter((t) => t && !t.startsWith('http'))
-        .map((t) => path.resolve(path.dirname(indexDoc.filePath), t))
+        .map((l) => resolveLocalLink(indexDoc, l.target))
+        .filter(Boolean)
     );
 
     for (const doc of graph.documents) {
@@ -714,133 +778,84 @@ export function loadSchemaFromDocsDir(docsDir) {
  * @param {ReturnType<typeof loadDocsGraph>} graph
  * @returns {string}
  */
+function isHistory(doc) {
+  return ['done', 'superseded', 'deprecated'].includes(doc.frontmatter?.status);
+}
+
+function indexDocuments(graph) {
+  return graph.documents.filter((doc) => typeof doc.frontmatter?.id === 'string' && doc.frontmatter.id !== 'index')
+    .sort((a, b) => a.frontmatter.id.localeCompare(b.frontmatter.id));
+}
+
+function formatEntry(doc) {
+  const fm = doc.frontmatter;
+  // Markdown link labels and paths may contain punctuation or spaces.
+  const title = String(fm.title || fm.id).replace(/[\[\]\\]/g, '\\$&');
+  const target = doc.relativePath.split('/').map((part) => encodeURIComponent(part).replace(/[()]/g, (c) => c === '(' ? '%28' : '%29')).join('/');
+  const summary = String(fm.summary || '').replace(/\s+/g, ' ');
+  return `- [${title}](./${target}) \`[${fm.status}]\` — ${summary}`;
+}
+
 export function generateIndexContent(graph) {
-  const docs = graph.documents.filter((d) => d.frontmatter && d.frontmatter.id !== 'index');
-
-  const formatEntry = (doc, showStatus = false) => {
-    const fm = doc.frontmatter;
-    const relLink = `./${doc.relativePath}`;
-    const statusBadge = showStatus ? ` \`[${fm.status}]\`` : '';
-    return `- [${fm.title}](${relLink})${statusBadge} — ${fm.summary}`;
-  };
-
+  const docs = indexDocuments(graph);
+  const current = docs.filter((doc) => !isHistory(doc) && doc.frontmatter.status !== 'draft' && doc.frontmatter.type !== 'plan');
   const sections = [
-    {
-      heading: '## 全体像・基本設計 (Overview & Architecture)',
-      items: docs
-        .filter((d) => ['overview', 'architecture', 'glossary'].includes(d.frontmatter.type) && d.frontmatter.status !== 'deprecated')
-        .sort((a, b) => {
-          const order = { overview: 1, architecture: 2, glossary: 3 };
-          return (order[a.frontmatter.type] || 9) - (order[b.frontmatter.type] || 9);
-        })
-        .map((d) => formatEntry(d, d.frontmatter.status === 'draft')),
-      emptyText: '_（まだ文書がありません。`docs-bootstrap` または `docs-author` スキルで作成してください）_',
-    },
-    {
-      heading: '## 機能仕様 (Specs)',
-      items: docs
-        .filter((d) => d.frontmatter.type === 'spec' && d.frontmatter.status !== 'deprecated')
-        .sort((a, b) => a.frontmatter.id.localeCompare(b.frontmatter.id))
-        .map((d) => formatEntry(d, d.frontmatter.status === 'draft')),
-      emptyText: '_（まだ文書がありません）_',
-    },
-    {
-      heading: '## 設計判断の記録 (ADR)',
-      items: docs
-        .filter((d) => d.frontmatter.type === 'adr')
-        .sort((a, b) => a.frontmatter.id.localeCompare(b.frontmatter.id))
-        .map((d) => formatEntry(d, true)),
-      emptyText: '_（まだ文書がありません）_',
-    },
-    {
-      heading: '## 進行中の作業計画 (Active Plans)',
-      items: docs
-        .filter((d) => d.frontmatter.type === 'plan' && d.frontmatter.status !== 'done')
-        .sort((a, b) => b.frontmatter.updated.localeCompare(a.frontmatter.updated))
-        .map((d) => formatEntry(d, true)),
-      emptyText: '_（進行中の計画はありません）_',
-    },
-    {
-      heading: '## ガイド・手順書 (Guides)',
-      items: docs
-        .filter((d) => d.frontmatter.type === 'guide' && d.frontmatter.status !== 'deprecated')
-        .sort((a, b) => a.frontmatter.id.localeCompare(b.frontmatter.id))
-        .map((d) => formatEntry(d, false)),
-      emptyText: '_（まだ文書がありません）_',
-    },
-    {
-      heading: '## 調査メモ・知見 (Notes)',
-      items: docs
-        .filter((d) => d.frontmatter.type === 'note' && d.frontmatter.status !== 'deprecated')
-        .sort((a, b) => b.frontmatter.updated.localeCompare(a.frontmatter.updated))
-        .map((d) => formatEntry(d, false)),
-      emptyText: '_（まだ文書がありません）_',
-    },
+    ['全体像・基本設計', current.filter((d) => ['overview', 'architecture', 'glossary'].includes(d.frontmatter.type))
+      .sort((a, b) => ['overview', 'architecture', 'glossary'].indexOf(a.frontmatter.type) - ['overview', 'architecture', 'glossary'].indexOf(b.frontmatter.type))],
+    ['現行の機能仕様', current.filter((d) => d.frontmatter.type === 'spec')],
+    ['有効な設計判断（実装完了を意味しません）', current.filter((d) => d.frontmatter.type === 'adr')],
+    ['ガイド・手順書', current.filter((d) => d.frontmatter.type === 'guide')],
+    ['調査メモ・知見（確定仕様とは区別）', current.filter((d) => d.frontmatter.type === 'note')],
+    ['下書き・未確認事項', docs.filter((d) => d.frontmatter.status === 'draft')],
+    ['進行中の変更案・作業計画', docs.filter((d) => d.frontmatter.type === 'plan' && d.frontmatter.status === 'active')],
   ];
-
-  const archivedPlans = docs
-    .filter((d) => d.frontmatter.type === 'plan' && d.frontmatter.status === 'done')
-    .sort((a, b) => b.frontmatter.updated.localeCompare(a.frontmatter.updated));
-
-  if (archivedPlans.length > 0) {
-    sections.push({
-      heading: '## 完了した作業計画 (Archived Plans)',
-      items: archivedPlans.map((d) => formatEntry(d, false)),
-      emptyText: '',
-    });
-  }
-
   const lines = ['<!-- docs-index:start -->'];
-  for (let i = 0; i < sections.length; i++) {
-    const sec = sections[i];
-    lines.push(sec.heading, '');
-    if (sec.items.length > 0) {
-      lines.push(...sec.items);
-    } else {
-      lines.push(sec.emptyText);
-    }
-    if (i < sections.length - 1) {
-      lines.push('');
-    }
+  for (const [heading, items] of sections) {
+    if (items.length) lines.push(`## ${heading}`, '', ...items.map(formatEntry), '');
   }
+  if (docs.some(isHistory)) lines.push('## 履歴', '', '[完了した計画・過去の文書](./_history.md)', '');
   lines.push('<!-- docs-index:end -->');
   return lines.join('\n');
 }
 
-/**
- * docs/index.md のマーカー間を更新してファイルに書き込む
- * @param {string} docsDir
- * @returns {boolean} 更新が行われたかどうか
- */
+export function generateHistoryContent(graph) {
+  return ['<!-- docs-history:start -->', ...indexDocuments(graph).filter(isHistory).map(formatEntry), '<!-- docs-history:end -->'].join('\n');
+}
+
+function replaceGeneratedBlock(original, generated, name) {
+  const start = `<!-- ${name}:start -->`;
+  const end = `<!-- ${name}:end -->`;
+  const s = original.indexOf(start);
+  const e = original.indexOf(end);
+  if (s === -1 && e === -1) return `${original.trimEnd()}\n\n${generated}\n`;
+  if (s === -1 || e < s || original.indexOf(start, s + start.length) !== -1 || original.indexOf(end, e + end.length) !== -1) {
+    throw new Error(`${name} の開始・終了マーカーを一組に修正してください`);
+  }
+  return original.slice(0, s) + generated + original.slice(e + end.length);
+}
+
+/** Update generated regions only; history lives beside index so relative links are shared. */
 export function updateIndexFile(docsDir) {
-  const indexPath = path.join(docsDir, 'index.md');
-  if (!fs.existsSync(indexPath)) {
-    return false;
-  }
   const graph = loadDocsGraph(docsDir);
-  const generatedBlock = generateIndexContent(graph);
-  const original = fs.readFileSync(indexPath, 'utf8');
-
-  const startMarker = '<!-- docs-index:start -->';
-  const endMarker = '<!-- docs-index:end -->';
-  const startIdx = original.indexOf(startMarker);
-  const endIdx = original.indexOf(endMarker);
-
-  let updatedContent;
-  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-    updatedContent =
-      original.slice(0, startIdx) +
-      generatedBlock +
-      original.slice(endIdx + endMarker.length);
-  } else {
-    updatedContent = `${original.trimEnd()}\n\n${generatedBlock}\n`;
+  const indexPath = path.join(graph.docsDir, 'index.md');
+  if (!fs.existsSync(indexPath)) return false;
+  // Never generate an apparently complete index from ambiguous/invalid metadata.
+  const result = validateDocs(graph);
+  if (result.errors.some((error) => error.code !== 'BROKEN_LINK')) return false;
+  const writes = [[indexPath, replaceGeneratedBlock(fs.readFileSync(indexPath, 'utf8'), generateIndexContent(graph), 'docs-index')]];
+  const historyPath = path.join(graph.docsDir, '_history.md');
+  if (graph.documents.some(isHistory) || fs.existsSync(historyPath)) {
+    const original = fs.existsSync(historyPath) ? fs.readFileSync(historyPath, 'utf8') : '# 過去の文書・完了した計画\n\n[現在の文書へ](./index.md)\n';
+    writes.push([historyPath, replaceGeneratedBlock(original, generateHistoryContent(graph), 'docs-history')]);
   }
-
-  if (updatedContent !== original) {
-    fs.writeFileSync(indexPath, updatedContent, 'utf8');
-    return true;
+  let changed = false;
+  for (const [file, content] of writes) {
+    if (!fs.existsSync(file) || fs.readFileSync(file, 'utf8') !== content) {
+      fs.writeFileSync(file, content, 'utf8');
+      changed = true;
+    }
   }
-  return false;
+  return changed;
 }
 
 /**
@@ -874,7 +889,7 @@ function runCli(argv) {
   if (!fs.existsSync(absDocsDir)) {
     if (jsonOutput) {
       console.log(
-        JSON.stringify({ valid: false, errors: [{ code: 'DOCS_DIR_NOT_FOUND', message: `Directory not found: ${absDocsDir}` }], warnings: [] }, null, 2)
+        JSON.stringify({ formatVersion: 1, edges: [], documents: [], indexUpdated: false, valid: false, errors: [{ code: 'DOCS_DIR_NOT_FOUND', message: `Directory not found: ${absDocsDir}` }], warnings: [] }, null, 2)
       );
     } else {
       console.error(`[ERROR] ドキュメントディレクトリが見つかりません: ${absDocsDir}`);
@@ -883,24 +898,30 @@ function runCli(argv) {
   }
 
   let indexUpdated = false;
+  let indexError;
   if (shouldUpdateIndex) {
-    indexUpdated = updateIndexFile(absDocsDir);
+    try { indexUpdated = updateIndexFile(absDocsDir); }
+    catch (error) { indexError = { level: 'error', file: 'index.md / _history.md', code: 'INDEX_UPDATE_FAILED', message: error.message, line: null }; }
   }
 
   const graph = loadDocsGraph(absDocsDir);
   const result = validateDocs(graph, { staleDays });
+  if (indexError) { result.errors.push(indexError); result.valid = false; }
 
   if (jsonOutput) {
     const graphSummary = graph.documents.map((d) => ({
       file: d.relativePath,
       frontmatter: d.frontmatter,
       backlinks: d.backlinks,
+      referenceBacklinks: d.referenceBacklinks,
       supersededBy: d.supersededBy,
     }));
     console.log(
       JSON.stringify(
         {
           ...result,
+          formatVersion: 1,
+          edges: graph.edges,
           indexUpdated,
           documents: graphSummary,
         },
