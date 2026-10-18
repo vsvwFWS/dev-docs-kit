@@ -73,7 +73,7 @@ function simulateInstall(targetDir) {
     JSON.stringify(
       {
         preset: 'solo',
-        version: '0.2.0',
+        version: '0.2.1',
         source: presetDir,
         installedAt: '2026-10-17',
       },
@@ -99,7 +99,7 @@ try {
   const agentsAfterFirst = fs.readFileSync(path.join(dummyRepo, 'AGENTS.md'), 'utf8');
   assert.ok(agentsAfterFirst.includes('## Build Commands'), 'Original AGENTS.md content must be preserved');
   assert.ok(
-    agentsAfterFirst.includes('<!-- repository-name:solo:start v0.2.0'),
+    agentsAfterFirst.includes('<!-- repository-name:solo:start v0.2.1'),
     'Block marker must be appended'
   );
 
@@ -115,6 +115,12 @@ try {
   const config = JSON.stringify({ excludedFiles: ['legacy.md'] });
   fs.writeFileSync(configPath, config);
   fs.writeFileSync(path.join(dummyRepo, 'docs/legacy.md'), '# Existing document without metadata\n');
+
+  // 管理ガイドは再導入で配布元へ戻る。
+  const guideNames = fs.readdirSync(path.join(presetDir, 'payload/docs/_guides'));
+  for (const name of guideNames) {
+    fs.writeFileSync(path.join(dummyRepo, 'docs/_guides', name), '# Stale guide\n');
+  }
 
   // 2回目の導入（アップデート・冪等性の確認）
   simulateInstall(dummyRepo);
@@ -134,6 +140,22 @@ try {
 
   assert.equal(fs.readFileSync(configPath, 'utf8'), config, 'create-only must preserve exclusions');
   assert.equal(fs.readFileSync(path.join(dummyRepo, 'docs/legacy.md'), 'utf8'), '# Existing document without metadata\n');
+
+  for (const name of guideNames) {
+    assert.equal(
+      fs.readFileSync(path.join(dummyRepo, 'docs/_guides', name), 'utf8'),
+      fs.readFileSync(path.join(presetDir, 'payload/docs/_guides', name), 'utf8'),
+      `Reinstall must overwrite managed guide: ${name}`
+    );
+  }
+
+  // 旧版の管理ブロックを更新し、後続のユーザー記述も保持する。
+  const userSuffix = '\n## Project notes\nKeep this section.\n';
+  fs.writeFileSync(path.join(dummyRepo, 'AGENTS.md'),
+    agentsAfterFirst.replace(/:solo:start v[\d.]+/, ':solo:start v0.1.0') + userSuffix);
+  simulateInstall(dummyRepo);
+  assert.equal(fs.readFileSync(path.join(dummyRepo, 'AGENTS.md'), 'utf8'),
+    agentsAfterFirst + userSuffix, 'Upgrade must replace the old block and preserve surrounding content');
 
   // 導入後の docs/ で lint が通ることを確認
   const graph = loadDocsGraph(path.join(dummyRepo, 'docs'));

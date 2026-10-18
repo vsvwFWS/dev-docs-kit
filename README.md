@@ -61,7 +61,7 @@ docs-bootstrap スキルを使って、このリポジトリの入口と概要�
 ├── .agents/
 │   ├── repository-name.lock.json   # 導入プリセット・バージョンの記録
 │   └── skills/
-│       ├── docs-author/SKILL.md     # 新規ドキュメント作成スキル
+│       ├── docs-author/SKILL.md     # 文書の新規作成・単独編集スキル
 │       ├── docs-sync/               # 実装後のドキュメント同期・検証スキル
 │       │   ├── SKILL.md
 │       │   └── scripts/docs_lint.mjs
@@ -70,7 +70,12 @@ docs-bootstrap スキルを使って、このリポジトリの入口と概要�
 │   ├── index.md                     # MOC（目次ハブ。docs_lint.mjs --index で自動更新可能）
 │   ├── _config.json                # 既存文書を段階的に取り込むための対象外一覧
 │   ├── _viewer-contract.md         # JSON・参照グラフとビューアーの連携仕様
-│   ├── _conventions.md              # ドキュメント規約（人間・エージェント共通の正本）
+│   ├── _conventions.md              # 全編集に共通する規約と詳細への案内
+│   ├── _guides/                   # 必要なときだけ読む詳細規約
+│   │   ├── metadata.md            # メタデータ・ID・リンク
+│   │   ├── document-types.md      # 種別・配置・状態
+│   │   ├── diagrams.md            # 図・画像・表
+│   │   └── adoption.md            # 既存文書の取り込み
 │   ├── _schema/
 │   │   └── frontmatter.schema.json  # フロントマターの JSON Schema
 │   └── _templates/                  # 文書タイプ別の日本語テンプレート（8種）
@@ -105,6 +110,12 @@ repository-name/
 ```bash
 bash tests/run.sh
 ```
+
+## 規約の読み込み経路
+
+`solo` v0.2.1では、**AGENTS.md → 必要なスキル → 共通規約 → 作業に必要な詳細・テンプレート** の順に読みます。関連仕様を読むだけなら目次と対象文書で済み、新機能に着手しただけでは文書作成スキルを読みません。
+
+文書の新規作成・単独編集はdocs-author、実装後の影響確認・同期と検証依頼はdocs-sync、初期整備はdocs-bootstrapが入口です。詳細は [共通規約](./presets/solo/payload/docs/_conventions.md) の条件に従って選びます。実装後に文書への影響がなければ規約を読まず終了し、Lintだけの依頼では検証を実行して問題に応じた規約だけを参照します。同じ作業中に確認した規約の再読は不要です。
 
 ## 文書の品質とビューアー連携
 

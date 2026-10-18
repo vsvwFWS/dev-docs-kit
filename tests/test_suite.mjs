@@ -32,6 +32,35 @@ const repoRoot = path.resolve(__dirname, '..');
     assert.ok(fs.existsSync(fullSrc), `manifest src must exist: ${srcRel}`);
   }
 
+  // 配布先で解決する参照とmanifestへの収録を確認する。
+  // 通常文書の例示リンクを除き、スキル・共通規約・詳細ガイドの実リンクをたどる。
+  const entries = [...manifestText.matchAll(
+    /^  - src: (.+)\n    dest: (.+)\n    policy: (.+)$/gm
+  )].map((m) => ({ src: m[1], dest: m[2], policy: m[3] }));
+  const byDest = new Map(entries.map((entry) => [entry.dest, entry]));
+  const instructionEntries = entries.filter((entry) =>
+    entry.dest === 'AGENTS.md' || entry.dest.endsWith('/SKILL.md') ||
+    entry.dest === 'docs/_conventions.md' || entry.dest.startsWith('docs/_guides/')
+  );
+  const guidesDir = path.join(repoRoot, 'presets/solo/payload/docs/_guides');
+  for (const name of fs.readdirSync(guidesDir)) {
+    const entry = byDest.get(`docs/_guides/${name}`);
+    assert.ok(entry, `Guide must be distributed: ${name}`);
+    assert.equal(entry.policy, 'overwrite', `Guide must be updated on reinstall: ${name}`);
+  }
+  for (const entry of instructionEntries) {
+    const content = fs.readFileSync(path.join(repoRoot, 'presets/solo', entry.src), 'utf8');
+    const prose = content.replace(/```[\s\S]*?```/g, '').replace(/`[^`\n]*`/g, '');
+    for (const match of prose.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
+      const href = match[1];
+      if (/^(?:[a-z]+:|#)/i.test(href)) continue;
+      const target = path.posix.normalize(path.posix.join(
+        path.posix.dirname(entry.dest), href.split('#')[0]
+      ));
+      assert.ok(byDest.has(target), `${entry.dest}: reference must be distributed: ${href}`);
+    }
+  }
+
   // SKILL.md の name とフォルダ名の一致チェック
   const skillsRoot = path.join(repoRoot, 'presets/solo/payload/.agents/skills');
   const skillDirs = fs.readdirSync(skillsRoot, { withFileTypes: true }).filter((d) => d.isDirectory());
@@ -40,6 +69,7 @@ const repoRoot = path.resolve(__dirname, '..');
   for (const dir of skillDirs) {
     const skillFile = path.join(skillsRoot, dir.name, 'SKILL.md');
     assert.ok(fs.existsSync(skillFile), `SKILL.md must exist in ${dir.name}`);
+    assert.ok(byDest.has(`.agents/skills/${dir.name}/SKILL.md`), 'Skill must be distributed');
     const parsed = parseDocument(fs.readFileSync(skillFile, 'utf8'), skillFile);
     assert.ok(parsed.hasFrontmatter, `${dir.name}/SKILL.md must have frontmatter`);
     assert.equal(parsed.frontmatter.name, dir.name, `Skill name must match folder name: ${dir.name}`);
