@@ -25,8 +25,8 @@ function simulateInstall(targetDir) {
     fs.writeFileSync(agentsPath, `# AGENTS.md\n\n${blockContent}\n`, 'utf8');
   } else {
     const existing = fs.readFileSync(agentsPath, 'utf8');
-    const startMarker = '<!-- repository-name:solo:start';
-    const endMarker = '<!-- repository-name:solo:end -->';
+    const startMarker = '<!-- dev-docs-kit:solo:start';
+    const endMarker = '<!-- dev-docs-kit:solo:end -->';
     const sIdx = existing.indexOf(startMarker);
     const eIdx = existing.indexOf(endMarker);
 
@@ -69,11 +69,11 @@ function simulateInstall(targetDir) {
 
   // lock ファイルの記録
   fs.writeFileSync(
-    path.join(targetDir, '.agents/repository-name.lock.json'),
+    path.join(targetDir, '.agents/dev-docs-kit.lock.json'),
     JSON.stringify(
       {
         preset: 'solo',
-        version: '0.2.1',
+        version: '0.2.2',
         source: presetDir,
         installedAt: '2026-10-17',
       },
@@ -99,7 +99,7 @@ try {
   const agentsAfterFirst = fs.readFileSync(path.join(dummyRepo, 'AGENTS.md'), 'utf8');
   assert.ok(agentsAfterFirst.includes('## Build Commands'), 'Original AGENTS.md content must be preserved');
   assert.ok(
-    agentsAfterFirst.includes('<!-- repository-name:solo:start v0.2.1'),
+    agentsAfterFirst.includes('<!-- dev-docs-kit:solo:start v0.2.2'),
     'Block marker must be appended'
   );
 

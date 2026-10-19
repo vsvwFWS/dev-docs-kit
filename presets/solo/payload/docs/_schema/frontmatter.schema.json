@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/OWNER/repository-name/schemas/frontmatter.schema.json",
+  "$id": "https://github.com/vsvwFWS/dev-docs-kit/schemas/frontmatter.schema.json",
   "title": "Development Docs Frontmatter Schema",
   "description": "開発ドキュメントの YAML フロントマター構造定義（lint スクリプトおよびビューアー共通）",
   "type": "object",

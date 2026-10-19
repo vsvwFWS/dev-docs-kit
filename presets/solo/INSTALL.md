@@ -1,6 +1,6 @@
 # `solo` プリセット導入・更新手順書（エージェント実行用）
 
-このドキュメントは、AIコーディングエージェント（Codex / Antigravity CLI 等）が対象リポジトリへ `repository-name` の `solo` プリセットを導入またはアップデートするための実行手順書です。
+このドキュメントは、AIコーディングエージェント（Codex / Antigravity CLI 等）が対象リポジトリへ `dev-docs-kit` の `solo` プリセットを導入またはアップデートするための実行手順書です。
 
 ユーザーから「この `INSTALL.md` に従って導入して」と指示された場合、以下のステップを順番に実行してください。
 
@@ -29,8 +29,8 @@
 
 1. `SOURCE_DIR/manifest.yaml` を読み込み、バージョンと配布対象ファイル一覧を確認します。
 2. 対象リポジトリ内の以下のファイルの有無と内容を確認します。
-   - `.agents/repository-name.lock.json`（過去に導入済みか、バージョンはいくつか）
-   - `AGENTS.md`（既存のルールがあるか、`<!-- repository-name:solo:start` マーカーが既にあるか）
+   - `.agents/dev-docs-kit.lock.json`（過去に導入済みか、バージョンはいくつか）
+   - `AGENTS.md`（既存のルールがあるか、`<!-- dev-docs-kit:solo:start` マーカーが既にあるか）
    - `docs/` ディレクトリ（既存のドキュメント、目次、`_config.json`、`_history.md` とそのマーカー）
    - コード・README・プロジェクトの目的や利用シナリオ（新規か、開発途中か）
    - `.agents/skills/` ディレクトリ
@@ -72,7 +72,7 @@
 - `SOURCE_DIR/payload/AGENTS.block.md` の内容を読み込みます。
 - 対象リポジトリに `AGENTS.md` が存在しない場合：
   - `# AGENTS.md\n\n` の見出しに続けて `AGENTS.block.md` の内容を書き込みます。
-- 対象リポジトリに `AGENTS.md` が存在し、`<!-- repository-name:solo:start` から `<!-- repository-name:solo:end -->` までのマーカーブロックが**既にある場合**：
+- 対象リポジトリに `AGENTS.md` が存在し、`<!-- dev-docs-kit:solo:start` から `<!-- dev-docs-kit:solo:end -->` までのマーカーブロックが**既にある場合**：
   - マーカー開始行からマーカー終了行までを、新しい `AGENTS.block.md` の内容で置換します（マーカー外の既存記述は一切変更しない）。
 - 対象リポジトリに `AGENTS.md` が存在し、マーカーが**まだない場合**：
   - 既存の `AGENTS.md` の末尾に空行を1行挟んで `AGENTS.block.md` の内容を追記します。
@@ -91,14 +91,14 @@
 
 ---
 
-## ステップ 5: ロックファイル（`.agents/repository-name.lock.json`）の記録
+## ステップ 5: ロックファイル（`.agents/dev-docs-kit.lock.json`）の記録
 
-導入・更新したバージョンと取得元を記録するため、対象リポジトリの `.agents/repository-name.lock.json` を作成（または更新）します。
+導入・更新したバージョンと取得元を記録するため、対象リポジトリの `.agents/dev-docs-kit.lock.json` を作成（または更新）します。
 
 ```json
 {
   "preset": "solo",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "source": "<GitHub URL またはローカルパス>",
   "installedAt": "<YYYY-MM-DD>"
 }

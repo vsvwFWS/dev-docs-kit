@@ -1,5 +1,5 @@
 preset: solo
-version: 0.2.1
+version: 0.2.2
 description: 個人開発・小規模プロジェクト向けの開発ドキュメント構成プリセット
 
 files:
@@ -11,7 +11,7 @@ files:
     dest: docs/_config.json
     policy: create-only
 
-  # 管理ファイル: repository-name が正本。アップデート時は上書き更新する
+  # 管理ファイル: dev-docs-kit が正本。アップデート時は上書き更新する
   - src: payload/docs/_conventions.md
     dest: docs/_conventions.md
     policy: overwrite
@@ -93,8 +93,8 @@ files:
   - src: payload/AGENTS.block.md
     dest: AGENTS.md
     policy: merge-block
-    marker_start: "<!-- repository-name:solo:start"
-    marker_end: "<!-- repository-name:solo:end -->"
+    marker_start: "<!-- dev-docs-kit:solo:start"
+    marker_end: "<!-- dev-docs-kit:solo:end -->"
 
   # 任意の VSCode 設定統合
   - src: payload/.vscode/extensions.json

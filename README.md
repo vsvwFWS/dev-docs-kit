@@ -1,49 +1,42 @@
-# repository-name
+# dev-docs-kit
 
-AIコーディングエージェント（Codex / Antigravity CLI など）と人間の双方が扱いやすい開発ドキュメント構成を、任意の開発リポジトリへ素早く導入するための設定・スキル・テンプレート集です。
+AIコーディングエージェント（Codex / Antigravity CLI など）と人間が協調して管理・参照できる開発ドキュメント体系を、任意のリポジトリへ導入するためのプリセット・スキル・テンプレート集です。
 
----
-
-## 特徴
-
-1. **人間とAIが目的に応じて読める入口（案内 + Summary）**
-   - 管理対象の文書に YAML フロントマター（`id`, `type`, `status`, `summary`, `related` など）を付与します。
-   - 人間とAIは目次の目的別案内と要約から必要な文書へ進み、機能一覧から現行仕様・設計理由・手順を探せます。
-2. **Codex / Antigravity CLI 両対応の構成**
-   - 常駐ルールは `AGENTS.md`、作業手順は `.agents/skills/<skill>/SKILL.md` に分離し、両エージェントが標準で認識できるディレクトリ構造を採用しています。
-3. **外部パッケージ依存ゼロの Node.js 検証・同期スクリプト（`docs_lint.mjs`）**
-   - `npm install` 不要で動作する単一ファイル（ESM）のリンター／インデックス生成器を同梱しています。
-   - 将来ドキュメントビューアーやエディターを開発する際、パーサーやグラフ構築（逆リンク計算など）のモジュールとしてそのまま `import` できます。
+> [!NOTE]
+> **個人開発・開発途中のリポジトリです**
+> 本リポジトリは作者個人の開発および試行錯誤を目的としており、他者向けの動作保証・品質保証やサポートは想定していません。仕様やファイル構成は予告なく変更される場合があります。
+> また、本リポジトリの設計・コード・ドキュメントの作成には AI を活用しています。
 
 ---
 
-## プリセット一覧
+## 主な機能と構成
 
-| プリセット | 対象規模 | 概要 |
-|---|---|---|
-| [`solo`](./presets/solo/) | 個人開発・小規模プロジェクト | 最小限の文書タイプ（overview, architecture, glossary, spec, adr, plan, note, guide）と3つのエージェントスキル（作成・同期・初期生成）を導入します。 |
+- **`solo` プリセット (`presets/solo/`)**
+  - 個人・小規模プロジェクト向けの開発ドキュメント構成一式。
+  - **8つの文書種別テンプレート**: `overview`, `architecture`, `glossary`, `spec`, `adr`, `plan`, `note`, `guide`
+  - **3つのエージェント用スキル**:
+    - `docs-author`: 文書の新規作成・個別編集
+    - `docs-sync`: コード変更後のドキュメント更新・影響確認・整合性検証
+    - `docs-bootstrap`: プロジェクト初期のドキュメント（全体像・用語・概要）生成
+- **外部依存ゼロの検証・目次生成スクリプト (`docs_lint.mjs`)**
+  - Node.js 標準モジュールのみで動作（`npm install` 不要）。
+  - YAMLフロントマター検証、リンク切れ検出、双方向リンク・置換（supersedes）のグラフ構築、`docs/index.md` の自動目次更新に対応。
+- **実例 (`examples/auth-docs/`)**
+  - 認証機能を題材としたドキュメント構成の実例を同梱。
 
 ---
 
-## 導入方法（対象リポジトリのエージェントへの指示）
+## 導入方法（対象リポジトリでの手順）
 
-導入したい開発リポジトリで Codex または Antigravity CLI を起動し、以下のプロンプトを入力してください。新規導入・アップデートどちらも同じプロンプトで実行できます。
-
-### GitHub から導入する場合
+導入したいリポジトリでエージェント（Codex / Antigravity CLI 等）を起動し、以下の手順書を指定して指示します。
 
 ```text
-https://github.com/OWNER/repository-name の presets/solo/INSTALL.md を読んで、このリポジトリに開発ドキュメントの仕組みを導入してください。
+https://github.com/vsvwFWS/dev-docs-kit の presets/solo/INSTALL.md を読んで、このリポジトリに開発ドキュメントの仕組みを導入してください。
 ```
 
-### ローカルパスから導入する場合
+※ ローカルに本リポジトリがある場合は、ローカルの `presets/solo/INSTALL.md` のパスを指定して実行することも可能です。
 
-```text
-/path/to/repository-name/presets/solo/INSTALL.md に従って、このリポジトリに開発ドキュメントの仕組みを導入してください。
-```
-
-### 導入直後にドキュメントの入口と概要を整える場合
-
-導入が完了したあと、続けて以下のように指示すると、入口と概要を整え、必要に応じて構成・用語の文書を生成します。新規プロジェクトでは目的や利用シナリオから始めます。
+導入後、初期ドキュメントを生成したい場合は以下のように指示します。
 
 ```text
 docs-bootstrap スキルを使って、このリポジトリの入口と概要、および理解に必要なドキュメントの初版を作成してください。
@@ -51,58 +44,20 @@ docs-bootstrap スキルを使って、このリポジトリの入口と概要�
 
 ---
 
-## 導入される構成（`solo` プリセット）
-
-対象リポジトリには以下のファイルが配置・統合されます。導入後は対象リポジトリ単体で完結し、普段の作業でこの `repository-name` リポジトリを参照し続ける必要はありません。
+## リポジトリ構成
 
 ```text
-<対象リポジトリ>/
-├── AGENTS.md                        # 常駐ルール（マーカー付きブロックとして追記・更新）
-├── .agents/
-│   ├── repository-name.lock.json   # 導入プリセット・バージョンの記録
-│   └── skills/
-│       ├── docs-author/SKILL.md     # 文書の新規作成・単独編集スキル
-│       ├── docs-sync/               # 実装後のドキュメント同期・検証スキル
-│       │   ├── SKILL.md
-│       │   └── scripts/docs_lint.mjs
-│       └── docs-bootstrap/SKILL.md  # 新規・既存の初期ドキュメント整備スキル
-├── docs/
-│   ├── index.md                     # MOC（目次ハブ。docs_lint.mjs --index で自動更新可能）
-│   ├── _config.json                # 既存文書を段階的に取り込むための対象外一覧
-│   ├── _viewer-contract.md         # JSON・参照グラフとビューアーの連携仕様
-│   ├── _conventions.md              # 全編集に共通する規約と詳細への案内
-│   ├── _guides/                   # 必要なときだけ読む詳細規約
-│   │   ├── metadata.md            # メタデータ・ID・リンク
-│   │   ├── document-types.md      # 種別・配置・状態
-│   │   ├── diagrams.md            # 図・画像・表
-│   │   └── adoption.md            # 既存文書の取り込み
-│   ├── _schema/
-│   │   └── frontmatter.schema.json  # フロントマターの JSON Schema
-│   └── _templates/                  # 文書タイプ別の日本語テンプレート（8種）
-└── .vscode/                         # 推奨拡張機能・設定（任意）
-```
-
----
-
-## このリポジトリ自身のディレクトリ構成
-
-```text
-repository-name/
-├── README.md                        # このファイル
-├── AGENTS.md                        # このリポジトリを保守するエージェント向けのルール
-├── docs/
-│   └── design/                      # 設計思想・背景ドキュメント
-│       ├── principles.md            # PKM / Wiki 由来の情報整理原則
-│       ├── diagrams.md              # 図表フォーマット選定方針
-│       └── agent-mechanisms.md      # AGENTS.md / Skills / Script の役割分担
+dev-docs-kit/
+├── README.md
+├── AGENTS.md                   # このリポジトリ自体の開発・保守ルール
+├── docs/design/                # 設計方針・背景思想
+├── examples/auth-docs/         # ドキュメント構成のサンプル
 ├── presets/
 │   └── solo/
-│       ├── INSTALL.md               # エージェントが実行する導入手順書
-│       ├── manifest.yaml            # 配布ファイルと上書きポリシー定義
-│       └── payload/                 # 対象リポジトリへ配置される実体一式
-└── tests/
-    ├── run.sh                       # テスト実行スクリプト
-    └── fixtures/                    # 検証用の正常系・異常系ドキュメント
+│       ├── INSTALL.md          # 導入手順書
+│       ├── manifest.yaml       # 配布対象ファイル一覧
+│       └── payload/            # 対象リポジトリへ配置される実体ファイル群
+└── tests/                      # テストスクリプト・導入シミュレーション
 ```
 
 ## テストの実行
@@ -110,17 +65,3 @@ repository-name/
 ```bash
 bash tests/run.sh
 ```
-
-## 規約の読み込み経路
-
-`solo` v0.2.1では、**AGENTS.md → 必要なスキル → 共通規約 → 作業に必要な詳細・テンプレート** の順に読みます。関連仕様を読むだけなら目次と対象文書で済み、新機能に着手しただけでは文書作成スキルを読みません。
-
-文書の新規作成・単独編集はdocs-author、実装後の影響確認・同期と検証依頼はdocs-sync、初期整備はdocs-bootstrapが入口です。詳細は [共通規約](./presets/solo/payload/docs/_conventions.md) の条件に従って選びます。実装後に文書への影響がなければ規約を読まず終了し、Lintだけの依頼では検証を実行して問題に応じた規約だけを参照します。同じ作業中に確認した規約の再読は不要です。
-
-## 文書の品質とビューアー連携
-
-現行仕様はspec、変更案と検証結果はplan、判断の理由はADRに分けます。同期時には合意済みの変更・実装の不具合・意図不明の差分を区別します。文書は必要なものだけ段階的に作ります。
-
-目次は現行文書・下書き・進行中の計画を分け、完了計画などは必要時に生成する `docs/_history.md` へ集約します。本文リンク・related・supersedesを区別した参照グラフをJSONで取得できます。詳細は [ビューアー連携契約](./presets/solo/payload/docs/_viewer-contract.md) を参照してください。
-
-[認証機能の文書例](./examples/auth-docs/index.md) で、全体像・現行仕様・設計理由・予定変更の読み分けを確認できます。Lintは構造を検証するもので、本文の意味や実装の正しさは別に確認します。
